@@ -1,0 +1,15 @@
+sudo: false
+language: go
+
+env:
+    - GO111MODULE=on
+
+go:
+    - 1.9.x
+    - 1.10.x
+    - 1.11.x
+
+script:
+    - go test -v
+    - go build -o main
+    - ./main
