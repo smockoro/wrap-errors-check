@@ -12,4 +12,3 @@ go:
 script:
     - go test -v
     - go build -o main
-    - main
