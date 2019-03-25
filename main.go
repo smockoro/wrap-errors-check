@@ -2,9 +2,13 @@ package main
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/ioutil"
 	"log"
 	"path/filepath"
+	"regexp"
 )
 
 func main() {
@@ -20,12 +24,55 @@ func targetWalk(dir string) []string {
 	var paths []string
 	for _, file := range files {
 		if !file.IsDir() {
-			paths = append(paths, filepath.Join(dir, file.Name()))
+			path := filepath.Join(dir, file.Name())
+			paths = append(paths, path)
+			checkGofile(path)
+		} else {
+			paths = append(paths, targetWalk(filepath.Join(dir, file.Name()))...)
 		}
-		paths = append(paths, targetWalk(filepath.Join(dir, file.Name()))...)
 	}
 
 	return paths
+}
+
+func checkGofile(filepath string) {
+	r := regexp.MustCompile(`[A-Za-z0-9\_\.\/]*.go`)
+	if r.MatchString(filepath) {
+		fmt.Println(filepath)
+		// *.goにマッチすれば構文解析
+		checkWrapped(filepath)
+	}
+}
+
+func checkWrapped(filepath string) {
+	fset := token.NewFileSet()
+	f, _ := parser.ParseFile(fset, filepath, nil, parser.Mode(0))
+
+	ast.Inspect(f, func(n ast.Node) bool {
+		if v, ok := n.(*ast.CallExpr); ok {
+			fmt.Println(v.Fun.Pos())
+		}
+		return true
+	})
+
+	ast.Inspect(f, func(n ast.Node) bool {
+		if v, ok := n.(*ast.CallExpr); ok {
+			var f *ast.Ident
+			var m ast.Expr
+			switch fun := v.Fun.(type) {
+			case *ast.Ident:
+				f = fun
+			case *ast.SelectorExpr:
+				m, f = fun.X, fun.Sel
+			}
+			fmt.Println(f, m)
+		}
+		return true
+	})
+
+	for _, d := range f.Decls {
+		ast.Print(fset, d)
+	}
 }
 
 //TODO
