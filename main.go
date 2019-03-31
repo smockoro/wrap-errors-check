@@ -22,11 +22,12 @@ func targetWalk(dir string) []string {
 	}
 
 	var paths []string
+	r := regexp.MustCompile(`[A-Za-z0-9\_\.\/]*.go`)
 	for _, file := range files {
-		if !file.IsDir() {
-			path := filepath.Join(dir, file.Name())
+		path := filepath.Join(dir, file.Name())
+		if !file.IsDir() && r.MatchString(path) {
 			paths = append(paths, path)
-			checkGofile(path)
+			checkWrapped(path)
 		} else {
 			paths = append(paths, targetWalk(filepath.Join(dir, file.Name()))...)
 		}
@@ -35,53 +36,70 @@ func targetWalk(dir string) []string {
 	return paths
 }
 
-func checkGofile(filepath string) {
-	r := regexp.MustCompile(`[A-Za-z0-9\_\.\/]*.go`)
-	if r.MatchString(filepath) {
-		fmt.Println(filepath)
-		// *.goにマッチすれば構文解析
-		checkWrapped(filepath)
-	}
-}
-
 func checkWrapped(filepath string) {
 	fset := token.NewFileSet()
 	f, _ := parser.ParseFile(fset, filepath, nil, parser.Mode(0))
 
 	ast.Inspect(f, func(n ast.Node) bool {
-		if v, ok := n.(*ast.CallExpr); ok {
-			fmt.Println(v.Fun.Pos())
-		}
-		return true
-	})
-
-	ast.Inspect(f, func(n ast.Node) bool {
-		if v, ok := n.(*ast.CallExpr); ok {
-			var f *ast.Ident
-			var m ast.Expr
-			switch fun := v.Fun.(type) {
-			case *ast.Ident:
-				f = fun
-			case *ast.SelectorExpr:
-				m, f = fun.X, fun.Sel
+		if v, ok := n.(*ast.FuncDecl); ok {
+			fmt.Printf("Function Name [ %s ]\n", v.Name.Name)
+			ff := fset.File(v.Pos())
+			fmt.Println(fset.File(v.Pos()))
+			fmt.Println(ff.Name())        // ファイル名が取れる
+			fmt.Println(ff.Line(v.Pos())) // これで行数が取れる
+			if v.Type.Results != nil {
+				for _, e := range v.Type.Results.List {
+					switch rtype := e.Type.(type) {
+					case *ast.Ident:
+						if rtype.Name == "error" {
+							returnCheck(v.Body)
+						}
+					}
+				}
 			}
-			fmt.Println(f, m)
 		}
 		return true
 	})
 
-	for _, d := range f.Decls {
-		ast.Print(fset, d)
-	}
+	// For Debug
+	//for _, d := range f.Decls {
+	//ast.Print(fset, d)
+	//}
+}
+
+func returnCheck(body *ast.BlockStmt) {
+	ast.Inspect(body, func(n ast.Node) bool {
+		if v, ok := n.(*ast.ReturnStmt); ok {
+			for _, rlt := range v.Results {
+				switch r := rlt.(type) {
+				case *ast.Ident:
+					fmt.Println(r.Name)
+					if r.Name == "err" {
+						// ファイル名、行数、関数名とか取れるとうれしい
+						fmt.Println("err is not wrapped errors package")
+
+					}
+				}
+			}
+		}
+		return true
+	})
+}
+
+// ModuleCheck : a
+func ModuleCheck(m ast.Expr) {
+
+}
+
+// FunctionCheck : a
+func FunctionCheck(f *ast.Ident) {
+
 }
 
 //TODO
 // テストコードでフォルダウォークするようにする ioutli系を使ったテストをする？
 // 上記はどこかに参考資料があったので探して内容を理解してコードに残す。
 
-// ウォークしてファイル *.goのファイルだけを取得する。
-// 取得したファイルに対して構文解析をかけて errをlogに履いている部分を切り出す
-// 構文木的にerrorsでラップされていないければ問題なのでチェックしておく
 // 最後の結果として何個のうち何個が通っているのか、
 // 間違っている場所はどのソースの何行目何列目なのか出力レポート出力
 
