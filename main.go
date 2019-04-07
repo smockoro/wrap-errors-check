@@ -28,11 +28,12 @@ func targetWalk(dir string) []string {
 		if !file.IsDir() && r.MatchString(path) {
 			paths = append(paths, path)
 			checkWrapped(path)
+		} else if !file.IsDir() {
+
 		} else {
 			paths = append(paths, targetWalk(filepath.Join(dir, file.Name()))...)
 		}
 	}
-
 	return paths
 }
 
@@ -42,42 +43,35 @@ func checkWrapped(filepath string) {
 
 	ast.Inspect(f, func(n ast.Node) bool {
 		if v, ok := n.(*ast.FuncDecl); ok {
-			fmt.Printf("Function Name [ %s ]\n", v.Name.Name)
-			ff := fset.File(v.Pos())
-			fmt.Println(fset.File(v.Pos()))
-			fmt.Println(ff.Name())        // ファイル名が取れる
-			fmt.Println(ff.Line(v.Pos())) // これで行数が取れる
+			fmt.Printf("Function Name [ %s ]\n", v.Name)
 			if v.Type.Results != nil {
 				for _, e := range v.Type.Results.List {
 					switch rtype := e.Type.(type) {
 					case *ast.Ident:
 						if rtype.Name == "error" {
-							returnCheck(v.Body)
+							returnCheck(fset, v.Body)
 						}
 					}
 				}
+			} else {
+				fmt.Println(v.Name, "No Error")
 			}
 		}
 		return true
 	})
-
-	// For Debug
-	//for _, d := range f.Decls {
-	//ast.Print(fset, d)
-	//}
 }
 
-func returnCheck(body *ast.BlockStmt) {
+func returnCheck(fset *token.FileSet, body *ast.BlockStmt) {
 	ast.Inspect(body, func(n ast.Node) bool {
 		if v, ok := n.(*ast.ReturnStmt); ok {
 			for _, rlt := range v.Results {
 				switch r := rlt.(type) {
 				case *ast.Ident:
-					fmt.Println(r.Name)
+					//fmt.Println(r.Name)
 					if r.Name == "err" {
-						// ファイル名、行数、関数名とか取れるとうれしい
+						ff := fset.File(r.Pos())
+						fmt.Println("Not Wrapped Position:", ff.Position(r.Pos()))
 						fmt.Println("err is not wrapped errors package")
-
 					}
 				}
 			}
